@@ -79,6 +79,10 @@ router.post("/", upload.array("images", 5), async (req, res) => {
 
       shippingFee: req.body.shippingFee,
 
+      category: req.body.category,   // ✅ ADD THIS
+
+      stock: Number(req.body.stock), 
+
       images: imageUrls
 
     });
