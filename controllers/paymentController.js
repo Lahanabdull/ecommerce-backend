@@ -1,65 +1,111 @@
 const razorpay = require("../config/razorpay");
 const crypto = require("crypto");
+const { db } = require("../config/firebaseAdmin");
 
 /* ================= CREATE ORDER ================= */
 
 exports.createOrder = async (req, res) => {
-
   try {
-
     const { amount } = req.body;
 
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        error: "Invalid amount"
+      });
+    }
+
     const options = {
-      amount: amount * 100, // convert to paise
+      amount: amount * 100,
       currency: "INR",
       receipt: "receipt_" + Date.now()
     };
 
     const order = await razorpay.orders.create(options);
 
+    console.log("✅ ORDER CREATED:", order.id);
+
     res.json(order);
 
   } catch (error) {
+    console.error("❌ CREATE ORDER ERROR:", error);
 
-    console.error(error);
-    res.status(500).json({ error: "Order creation failed" });
-
+    res.status(500).json({
+      error: "Order creation failed",
+      details: error.message
+    });
   }
-
 };
-
 
 /* ================= VERIFY PAYMENT ================= */
 
-exports.verifyPayment = (req, res) => {
+exports.verifyPayment = async (req, res) => {
+  try {
+    console.log("🔥 VERIFY API CALLED");
 
-  const {
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature
-  } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      user,
+      items,
+      total
+    } = req.body;
 
-  const body = razorpay_order_id + "|" + razorpay_payment_id;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing payment details"
+      });
+    }
 
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    .update(body.toString())
-    .digest("hex");
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
 
-  if (expectedSignature === razorpay_signature) {
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest("hex");
 
-    res.json({
-      success: true,
-      message: "Payment verified successfully"
-    });
+    if (expectedSignature === razorpay_signature) {
 
-  } else {
+      console.log("✅ PAYMENT VERIFIED");
 
-    res.status(400).json({
+      // ✅ SAVE ORDER TO FIREBASE
+      const orderData = {
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        user: user || {},
+        items: items || [],
+        total: total || 0,
+        status: "paid",
+        createdAt: new Date()
+      };
+
+      await db.collection("orders").add(orderData);
+
+      console.log("✅ ORDER SAVED TO FIREBASE");
+
+      return res.json({
+        success: true,
+        message: "Payment verified & order saved"
+      });
+
+    } else {
+
+      console.log("❌ SIGNATURE MISMATCH");
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed"
+      });
+    }
+
+  } catch (error) {
+
+    console.error("❌ VERIFY ERROR:", error);
+
+    return res.status(500).json({
       success: false,
-      message: "Payment verification failed"
+      message: "Server error during verification"
     });
-
   }
-
 };
