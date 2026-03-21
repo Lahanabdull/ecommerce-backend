@@ -73,6 +73,7 @@ exports.verifyPayment = async (req, res) => {
       const orderData = {
         orderId: razorpay_order_id,
         paymentId: razorpay_payment_id,
+        userId: req.body.userId,
         user: user || {},
         items: items || [],
         total: total || 0,
