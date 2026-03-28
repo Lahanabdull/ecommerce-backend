@@ -11,6 +11,7 @@ app.use(
   cors({
     origin: [
       "https://markandluth.web.app",
+      "https://markandluth.in",   
       "http://localhost:3000"
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
